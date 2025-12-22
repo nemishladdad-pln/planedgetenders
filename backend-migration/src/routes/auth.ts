@@ -55,6 +55,30 @@ router.get("/mobile/tenders", async (_req: Request, res: Response) => {
   }
 });
 
+// Mobile dashboard (minimal)
+router.get("/mobile/dashboard", async (_req: Request, res: Response) => {
+  try {
+    const users = await store.countUsers();
+    const tenders = await store.countTenders();
+    const status = await store.countTenderStatus();
+    res.json({ users, tenders, status });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Mobile vendor profile
+router.get("/mobile/vendors/:id", async (req: Request, res: Response) => {
+  try {
+    const v = await store.getVendor(req.params.id);
+    if (!v) return res.status(404).json({ error: "Vendor not found" });
+    const minimal = { id: v.id, name: v.name, contact: v.contact, partial: v.partial };
+    res.json(minimal);
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 // Buyer registration (requires admin approval)
 router.post("/buyers/register", async (req: Request, res: Response) => {
   try {

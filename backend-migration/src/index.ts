@@ -5,6 +5,7 @@ import path from "path";
 import fs from "fs";
 import tendersRouter from "./routes/tenders";
 import authRouter from "./routes/auth";
+import whatsappRouter from "./routes/whatsapp";
 
 dotenv.config();
 
@@ -29,6 +30,9 @@ app.get("/health", (_req, res) => {
 
 // auth & mobile endpoints
 app.use("/api/auth", authRouter);
+
+// whatsapp gateway endpoints (placeholder)
+app.use("/api/whatsapp", whatsappRouter);
 
 // tenders, vendors, admin
 app.use("/api/tenders", tendersRouter);

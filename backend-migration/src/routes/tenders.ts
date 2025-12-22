@@ -167,14 +167,15 @@ router.get("/calendar", async (_req: Request, res: Response) => {
     const tenders = await store.listTenders();
     const invoices = await store.listInvoices();
     const events = [
-      ...tenders.filter(t => t.dueDate).map(t => ({ id: t.id, title: t.title, date: t.dueDate, type: "tender", status: t.status })),
+      ...tenders.map(t => ({ id: t.id, title: t.title, date: t.dueDate || t.workDue || null, type: "tender", status: t.status, workDue: t.workDue || null })),
       ...invoices.map(i => ({ id: i.id, title: `Invoice ${i.id}`, date: i.dueDate, type: "invoice", status: i.status }))
-    ];
+    ].filter(e => e.date);
     // add conditional flag for due soon (within 7 days)
     const now = Date.now();
     const withFlags = events.map(e => {
       const ts = e.date ? new Date(e.date).getTime() : Date.now();
-      return { ...e, dueSoon: ts - now <= 7 * 24 * 3600 * 1000 };
+      const diff = ts - now;
+      return { ...e, dueSoon: diff <= 7 * 24 * 3600 * 1000 && diff >= 0, overdue: diff < 0 };
     });
     res.json(withFlags);
   } catch (err: any) {
@@ -225,6 +226,27 @@ router.post("/invoices", requireRole("Admin"), async (req: Request, res: Respons
 router.get("/invoices", requireRole("Admin"), async (_req: Request, res: Response) => {
   try {
     const inv = await store.listInvoices();
+    res.json({ total: inv.length, data: inv });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+router.get("/invoices/:id", requireRole("Admin"), async (req: Request, res: Response) => {
+  try {
+    const id = req.params.id;
+    const inv = await store.getInvoice(id);
+    if (!inv) return res.status(404).json({ error: "Invoice not found" });
+    res.json(inv);
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+router.get("/invoices/user/:userId", requireRole("Admin"), async (req: Request, res: Response) => {
+  try {
+    const userId = req.params.userId;
+    const inv = await store.listInvoicesByUser(userId);
     res.json({ total: inv.length, data: inv });
   } catch (err: any) {
     res.status(500).json({ error: err.message });

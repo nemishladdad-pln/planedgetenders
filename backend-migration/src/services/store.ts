@@ -240,6 +240,17 @@ export async function listInvoices(): Promise<Invoice[]> {
   return db.invoices || [];
 }
 
+export async function getInvoice(id: string): Promise<Invoice | null> {
+  const db = await readDb();
+  const inv = (db.invoices || []).find((x: Invoice) => x.id === id);
+  return inv || null;
+}
+
+export async function listInvoicesByUser(userId: string): Promise<Invoice[]> {
+  const db = await readDb();
+  return (db.invoices || []).filter((i: Invoice) => i.userId === userId);
+}
+
 // Buyers (registration requiring admin approval)
 export async function createBuyer(payload: any): Promise<any> {
   const db = await readDb();
@@ -282,6 +293,20 @@ export async function countTenderStatus(): Promise<Record<string, number>> {
     tally[s] = (tally[s] || 0) + 1;
   });
   return tally;
+}
+
+// Categories and subcategories derived from tenders
+export async function listCategories() {
+  const db = await readDb();
+  const items: Record<string, Set<string>> = {};
+  (db.tenders || []).forEach((t: Tender) => {
+    const cat = t.category || "Uncategorized";
+    const sub = t.subcategory || "";
+    items[cat] = items[cat] || new Set<string>();
+    if (sub) items[cat].add(sub);
+  });
+  const out = Object.keys(items).map(cat => ({ category: cat, subcategories: Array.from(items[cat]) }));
+  return out;
 }
 
 // Update a tender with arbitrary fields and persist
