@@ -114,6 +114,12 @@ export async function listVendors(): Promise<Vendor[]> {
   return db.vendors || [];
 }
 
+export async function getVendor(id: string): Promise<Vendor | null> {
+  const db = await readDb();
+  const v = (db.vendors || []).find((x: Vendor) => x.id === id);
+  return v || null;
+}
+
 export async function createVendor(payload: Partial<Vendor>): Promise<Vendor> {
   const db = await readDb();
   const id = payload.id || `v-${Date.now()}`;

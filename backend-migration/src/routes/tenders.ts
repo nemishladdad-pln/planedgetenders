@@ -1,6 +1,7 @@
 import { Router, Request, Response } from "express";
 import multer from "multer";
 import path from "path";
+import fs from "fs";
 import dotenv from "dotenv";
 import { requireRole } from "../middleware/roleMiddleware";
 import * as store from "../services/store";
@@ -45,7 +46,26 @@ router.post("/:id/budget", requireRole("Admin", "ProjectManager"), upload.single
     const type = (req.body.type as string) || (req.file ? "file" : "lumpsum");
     const amount = req.body.amount ? Number(req.body.amount) : undefined;
     const file = req.file ? `/uploads/${path.basename(req.file.path)}` : undefined;
-    const updated = await store.uploadTenderBudget(id, { type, amount, file });
+    // if CSV uploaded, attempt to parse into items
+    let items: any[] | undefined;
+    if (file && req.file && req.file.originalname.toLowerCase().endsWith(".csv")) {
+      try {
+        const raw = await fs.promises.readFile(req.file.path, "utf8");
+        const lines = raw.split(/\r?\n/).filter(Boolean);
+        if (lines.length >= 1) {
+          const headers = lines[0].split(",").map(h => h.trim());
+          items = lines.slice(1).map(l => {
+            const cols = l.split(",");
+            const obj: any = {};
+            headers.forEach((h, i) => obj[h] = cols[i] ? cols[i].trim() : "");
+            return obj;
+          });
+        }
+      } catch (e) {
+        console.warn("CSV parse failed", e);
+      }
+    }
+    const updated = await store.uploadTenderBudget(id, { type, amount, file, items });
     await appendActivity({ action: "upload_budget", by: (req as any).userRole, meta: { id, type, file } });
     res.json(updated);
   } catch (err: any) {
@@ -73,7 +93,11 @@ router.post("/:id/upload-signed", requireRole("Contractor", "Admin"), upload.sin
 // Vendors: partial registration before paywall
 router.post("/vendors/partial", async (req: Request, res: Response) => {
   try {
-    const v = await store.createVendor({ ...req.body, partial: true, history: [{ event: "partial_registered" }] });
+    // accept only minimal fields for quick registration
+    const { name, contact, email } = req.body;
+    if (!name) return res.status(400).json({ error: "name required" });
+    const v = await store.createVendor({ name, contact, email, partial: true, history: [{ event: "partial_registered" }] });
+    await appendActivity({ action: "vendor_partial_registered", meta: { id: v.id, email } });
     res.status(201).json(v);
   } catch (err: any) {
     res.status(500).json({ error: err.message });
@@ -92,6 +116,33 @@ router.post("/vendors/complete", requireRole("Admin", "ProjectManager"), async (
     v.partial = false;
     await appendActivity({ action: "vendor_complete", by: (req as any).userRole, meta: { id } });
     res.json(v);
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Get vendor profile including history
+router.get("/vendors/:id", async (req: Request, res: Response) => {
+  try {
+    const id = req.params.id;
+    const v = await store.getVendor(id);
+    if (!v) return res.status(404).json({ error: "Vendor not found" });
+    res.json(v);
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Upcoming tenders (future dueDate, sorted)
+router.get("/upcoming", async (_req: Request, res: Response) => {
+  try {
+    const tenders = await store.listTenders();
+    const now = Date.now();
+    const upcoming = (tenders || [])
+      .filter((t: any) => t.dueDate && new Date(t.dueDate).getTime() > now)
+      .sort((a: any, b: any) => new Date(a.dueDate).getTime() - new Date(b.dueDate).getTime())
+      .map((t: any) => ({ id: t.id, title: t.title, dueDate: t.dueDate, status: t.status, category: t.category, subcategory: t.subcategory }));
+    res.json({ total: upcoming.length, data: upcoming });
   } catch (err: any) {
     res.status(500).json({ error: err.message });
   }
