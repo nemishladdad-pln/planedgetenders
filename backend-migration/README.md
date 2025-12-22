@@ -44,6 +44,47 @@ This service is intentionally additive and will not modify existing hosting or e
 - The gateway now stores tenders/vendors in a local JSON store (DATA_STORE_FILE). Use query param ?proxy=1 to force proxy to existing Laravel backend.
 - Use header x-role: Admin|ProjectManager|Vendor|Viewer for role-protected routes.
 
+## Recent changes and development notes
+- This gateway now implements a number of new features (see CHANGELOG.md). Key items implemented in this repository:
+   - Tenders: category + subcategory, budget upload (lumpsum or CSV/Excel), signed work order upload
+   - Vendors: partial registration (pre-paywall), complete registration (post-payment), vendor history
+   - Subscriptions: create/list/update subscriptions (basic yearly flow)
+   - Invoices: creation and listing, `registrationDate` and `dueDate` fields
+   - Dashboard endpoints: user/tender counts, tender status, monthly tender series, top vendors
+   - Calendar endpoint: returns tender and invoice events with `dueSoon` and `overdue` flags
+   - Mobile endpoints: minimal mobile-friendly endpoints for tenders, dashboard, and vendor profiles
+   - WhatsApp: placeholder OTP send and a gateway skeleton available at `/api/whatsapp` (requires provider config)
+
+## Important environment variables (copy to .env)
+- `PORT` - server port (default 4000)
+- `UPLOAD_DIR` - path to serve/store uploaded files (default `./data/uploads`)
+- `DATA_STORE_FILE` - local JSON store path (default `./data/db.json`)
+- `ACTIVITY_LOG_FILE` - activity log file (default `./data/activity.log`)
+- `LARAVEL_API_URL` - existing Laravel backend URL for proxying
+- `WHATSAPP_API_URL`, `WHATSAPP_API_KEY` - (optional) provider endpoint + key for WhatsApp proxying
+
+## Developer guidance
+- Data store: currently a simple JSON file. For production, migrate to Postgres/MySQL and implement migrations (suggested next step).
+- Authentication: API uses an `x-role` header for role-guarded routes in this gateway (development convenience). Replace with real auth (JWT / OAuth2 / session) in production.
+- Uploads: Files are written to `UPLOAD_DIR` and served from `/uploads`. Restrict access and validate content in production.
+- WhatsApp: OTPs are sent via `services/whatsapp.ts` which either logs (placeholder) or calls `WHATSAPP_API_URL`. To enable delivery, set provider vars and implement secure webhook handling.
+- Tests: basic sanity checks live in repo scripts; add unit/integration tests and GitHub Actions for CI.
+
+## Useful endpoints (examples)
+- Health: `GET /health`
+- List tenders: `GET /api/tenders`
+- Upcoming tenders: `GET /api/tenders/upcoming`
+- Budget upload: `POST /api/tenders/:id/budget` (multipart/form-data with `budgetFile` or JSON lumpsum)
+- Upload signed workorder: `POST /api/tenders/:id/upload-signed` (Contractor/Admin role)
+- Vendor partial registration: `POST /api/tenders/vendors/partial`
+- Vendor profile: `GET /api/tenders/vendors/:id`
+- Vendor history: `GET /api/tenders/vendors/:id/history?offset=0&limit=20`
+- Admin dashboard: `GET /api/tenders/admin/dashboard` and `GET /api/tenders/admin/dashboard/summary` (require `x-role: Admin` header)
+- Calendar: `GET /api/tenders/calendar`
+- WhatsApp gateway: `POST /api/whatsapp/send` (proxy) and `POST /api/whatsapp/webhook` (provider callbacks)
+
+If you need me to add DB migrations, CI workflows, or wire a real WhatsApp provider, tell me which to prioritize.
+
 # Planedge Gateway - Self-hosting guide (summary)
 
 ## Features implemented:
