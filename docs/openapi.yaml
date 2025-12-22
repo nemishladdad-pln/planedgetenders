@@ -1,0 +1,55 @@
+openapi: 3.0.0
+info:
+  title: Planedge Gateway API
+  version: '1.0'
+servers:
+  - url: /api
+paths:
+  /tenders:
+    get:
+      summary: List tenders
+      responses:
+        '200':
+          description: OK
+  /tenders/upcoming:
+    get:
+      summary: Upcoming tenders
+      responses:
+        '200':
+          description: OK
+  /tenders/{id}/budget:
+    post:
+      summary: Upload budget (lumpsum or file)
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: OK
+  /tenders/vendors/{id}:
+    get:
+      summary: Vendor profile
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: OK
+  /auth/subscribe:
+    post:
+      summary: Create subscription
+      responses:
+        '201':
+          description: Created
+  /whatsapp/send:
+    post:
+      summary: Send WhatsApp message (gateway)
+      responses:
+        '200':
+          description: queued
