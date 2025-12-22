@@ -89,4 +89,28 @@ router.post("/subscribe", async (req: Request, res: Response) => {
   }
 });
 
+// List subscriptions (admin)
+router.get("/subscriptions", requireRole("Admin"), async (req: Request, res: Response) => {
+  try {
+    const page = req.query.page ? Number(req.query.page) : 1;
+    const perPage = req.query.perPage ? Number(req.query.perPage) : 20;
+    const list = await store.listSubscriptionsPaginated(page, perPage);
+    res.json(list);
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Update subscription (admin)
+router.patch("/subscriptions/:id", requireRole("Admin"), async (req: Request, res: Response) => {
+  try {
+    const id = req.params.id;
+    const updated = await store.updateSubscription(id, req.body);
+    await appendActivity({ action: "update_subscription", by: (req as any).userRole, meta: { id } });
+    res.json(updated);
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 export default router;

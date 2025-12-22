@@ -159,6 +159,69 @@ export async function listSubscriptions(): Promise<Subscription[]> {
   return db.subscriptions || [];
 }
 
+export async function getSubscription(id: string): Promise<Subscription | null> {
+  const db = await readDb();
+  const s = (db.subscriptions || []).find((x: Subscription) => x.id === id);
+  return s || null;
+}
+
+export async function updateSubscription(id: string, fields: Partial<Subscription>) {
+  const db = await readDb();
+  db.subscriptions = db.subscriptions || [];
+  const idx = db.subscriptions.findIndex((s: Subscription) => s.id === id);
+  if (idx === -1) throw new Error("Subscription not found");
+  db.subscriptions[idx] = { ...db.subscriptions[idx], ...fields };
+  await writeDb(db);
+  return db.subscriptions[idx];
+}
+
+export async function listSubscriptionsPaginated(page = 1, perPage = 20) {
+  const db = await readDb();
+  const all = db.subscriptions || [];
+  const start = (page - 1) * perPage;
+  const data = all.slice(start, start + perPage);
+  return { total: all.length, page, perPage, data };
+}
+
+export async function getVendorHistory(id: string, offset = 0, limit = 20) {
+  const db = await readDb();
+  const v = (db.vendors || []).find((x: Vendor) => x.id === id);
+  if (!v) throw new Error("Vendor not found");
+  const history = v.history || [];
+  const sliced = history.slice(offset, offset + limit);
+  return { total: history.length, offset, limit, data: sliced };
+}
+
+export async function countTendersByMonth(months = 12) {
+  const db = await readDb();
+  const now = new Date();
+  const map: Record<string, number> = {};
+  for (let i = 0; i < months; i++) {
+    const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
+    const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
+    map[key] = 0;
+  }
+  (db.tenders || []).forEach((t: Tender) => {
+    const c = t.createdAt ? new Date(t.createdAt) : null;
+    if (!c) return;
+    const key = `${c.getFullYear()}-${String(c.getMonth() + 1).padStart(2, "0")}`;
+    if (map[key] !== undefined) map[key] = (map[key] || 0) + 1;
+  });
+  // return as ordered array newest-first
+  const out = Object.keys(map).sort().map(k => ({ month: k, count: map[k] }));
+  return out;
+}
+
+export async function getTopVendors(limit = 10) {
+  const db = await readDb();
+  const vendors = db.vendors || [];
+  const ranked = vendors
+    .map((v: Vendor) => ({ id: v.id, name: v.name, historyCount: (v.history || []).length, createdAt: v.createdAt }))
+    .sort((a: any, b: any) => (b.historyCount - a.historyCount) || (new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()))
+    .slice(0, limit);
+  return ranked;
+}
+
 // Invoices
 export async function createInvoice(payload: Partial<Invoice>): Promise<Invoice> {
   const db = await readDb();

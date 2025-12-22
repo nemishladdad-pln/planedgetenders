@@ -133,6 +133,19 @@ router.get("/vendors/:id", async (req: Request, res: Response) => {
   }
 });
 
+// Vendor history (paginated)
+router.get("/vendors/:id/history", async (req: Request, res: Response) => {
+  try {
+    const id = req.params.id;
+    const offset = req.query.offset ? Number(req.query.offset) : 0;
+    const limit = req.query.limit ? Number(req.query.limit) : 20;
+    const hist = await store.getVendorHistory(id, offset, limit);
+    res.json(hist);
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 // Upcoming tenders (future dueDate, sorted)
 router.get("/upcoming", async (_req: Request, res: Response) => {
   try {
@@ -177,6 +190,22 @@ router.get("/admin/dashboard", requireRole("Admin"), async (_req: Request, res: 
     const status = await store.countTenderStatus();
     const subscriptions = await store.listSubscriptions();
     res.json({ users, tenders, status, subscriptionsCount: subscriptions.length });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Rich dashboard summary (admin) includes monthly series and top vendors
+router.get("/admin/dashboard/summary", requireRole("Admin"), async (_req: Request, res: Response) => {
+  try {
+    const users = await store.countUsers();
+    const tenders = await store.countTenders();
+    const status = await store.countTenderStatus();
+    const monthly = await store.countTendersByMonth(12);
+    const topVendors = await store.getTopVendors(10);
+    const subs = await store.listSubscriptions();
+    const subsByStatus = subs.reduce((acc: any, s: any) => { acc[s.status] = (acc[s.status] || 0) + 1; return acc; }, {});
+    res.json({ users, tenders, status, monthly, topVendors, subscriptions: { total: subs.length, byStatus: subsByStatus } });
   } catch (err: any) {
     res.status(500).json({ error: err.message });
   }
