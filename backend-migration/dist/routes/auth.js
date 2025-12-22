@@ -91,6 +91,31 @@ router.get("/mobile/tenders", async (_req, res) => {
         res.status(500).json({ error: err.message });
     }
 });
+// Mobile dashboard (minimal)
+router.get("/mobile/dashboard", async (_req, res) => {
+    try {
+        const users = await store.countUsers();
+        const tenders = await store.countTenders();
+        const status = await store.countTenderStatus();
+        res.json({ users, tenders, status });
+    }
+    catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+// Mobile vendor profile
+router.get("/mobile/vendors/:id", async (req, res) => {
+    try {
+        const v = await store.getVendor(req.params.id);
+        if (!v)
+            return res.status(404).json({ error: "Vendor not found" });
+        const minimal = { id: v.id, name: v.name, contact: v.contact, partial: v.partial };
+        res.json(minimal);
+    }
+    catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
 // Buyer registration (requires admin approval)
 router.post("/buyers/register", async (req, res) => {
     try {
@@ -120,6 +145,30 @@ router.post("/subscribe", async (req, res) => {
         const sub = await store.createSubscription(req.body);
         await (0, activityStore_1.appendActivity)({ action: "subscribe", meta: { subscriptionId: sub.id } });
         res.status(201).json(sub);
+    }
+    catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+// List subscriptions (admin)
+router.get("/subscriptions", (0, roleMiddleware_1.requireRole)("Admin"), async (req, res) => {
+    try {
+        const page = req.query.page ? Number(req.query.page) : 1;
+        const perPage = req.query.perPage ? Number(req.query.perPage) : 20;
+        const list = await store.listSubscriptionsPaginated(page, perPage);
+        res.json(list);
+    }
+    catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+// Update subscription (admin)
+router.patch("/subscriptions/:id", (0, roleMiddleware_1.requireRole)("Admin"), async (req, res) => {
+    try {
+        const id = req.params.id;
+        const updated = await store.updateSubscription(id, req.body);
+        await (0, activityStore_1.appendActivity)({ action: "update_subscription", by: req.userRole, meta: { id } });
+        res.json(updated);
     }
     catch (err) {
         res.status(500).json({ error: err.message });

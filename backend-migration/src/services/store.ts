@@ -97,7 +97,7 @@ export async function reTender(id: string, payload: Partial<Tender>): Promise<Te
   return newTender;
 }
 
-export async function uploadTenderBudget(id: string, budget: { type?: string; amount?: number; file?: string }) {
+export async function uploadTenderBudget(id: string, budget: { type?: string; amount?: number; file?: string; items?: any[] }) {
   const db = await readDb();
   db.tenders = db.tenders || [];
   const idx = db.tenders.findIndex((t: Tender) => t.id === id);

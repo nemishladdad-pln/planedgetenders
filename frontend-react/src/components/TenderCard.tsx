@@ -1,6 +1,9 @@
 import React from 'react';
 
 export default function TenderCard({ tender }: { tender: any }) {
+  const budgetType = tender?.budget?.type;
+  const budgetAmount = tender?.budget?.amount;
+
   return (
     <article className="bg-white p-4 rounded shadow-sm flex justify-between items-center">
       <div>
@@ -9,7 +12,11 @@ export default function TenderCard({ tender }: { tender: any }) {
       </div>
       <div className="text-right">
         <div className="text-sm">{tender.status}</div>
-        <div className="text-sm text-slate-600">{tender.budget_type === 'lumpsum' ? `₹ ${tender.budget_amount ?? '-'}` : (tender.budget_type === 'file' ? 'Budget File' : '—')}</div>
+        <div className="text-sm text-slate-600">
+          {budgetType === 'lumpsum'
+            ? `₹ ${budgetAmount ?? '-'}`
+            : (budgetType === 'file' ? 'Budget File' : '—')}
+        </div>
       </div>
     </article>
   );

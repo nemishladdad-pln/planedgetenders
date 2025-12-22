@@ -17,8 +17,7 @@ type Tender = {
   status?: string;
   category?: string;
   subcategory?: string;
-  budget_type?: string;
-  budget_amount?: number;
+  budget?: { type?: string; amount?: number; file?: string };
 };
 
 export default function App() {

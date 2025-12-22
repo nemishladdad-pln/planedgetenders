@@ -39,6 +39,7 @@ Object.defineProperty(exports, "__esModule", { value: true });
 const express_1 = require("express");
 const multer_1 = __importDefault(require("multer"));
 const path_1 = __importDefault(require("path"));
+const fs_1 = __importDefault(require("fs"));
 const dotenv_1 = __importDefault(require("dotenv"));
 const roleMiddleware_1 = require("../middleware/roleMiddleware");
 const store = __importStar(require("../services/store"));
@@ -79,7 +80,27 @@ router.post("/:id/budget", (0, roleMiddleware_1.requireRole)("Admin", "ProjectMa
         const type = req.body.type || (req.file ? "file" : "lumpsum");
         const amount = req.body.amount ? Number(req.body.amount) : undefined;
         const file = req.file ? `/uploads/${path_1.default.basename(req.file.path)}` : undefined;
-        const updated = await store.uploadTenderBudget(id, { type, amount, file });
+        // if CSV uploaded, attempt to parse into items
+        let items;
+        if (file && req.file && req.file.originalname.toLowerCase().endsWith(".csv")) {
+            try {
+                const raw = await fs_1.default.promises.readFile(req.file.path, "utf8");
+                const lines = raw.split(/\r?\n/).filter(Boolean);
+                if (lines.length >= 1) {
+                    const headers = lines[0].split(",").map(h => h.trim());
+                    items = lines.slice(1).map(l => {
+                        const cols = l.split(",");
+                        const obj = {};
+                        headers.forEach((h, i) => obj[h] = cols[i] ? cols[i].trim() : "");
+                        return obj;
+                    });
+                }
+            }
+            catch (e) {
+                console.warn("CSV parse failed", e);
+            }
+        }
+        const updated = await store.uploadTenderBudget(id, { type, amount, file, items });
         await (0, activityStore_1.appendActivity)({ action: "upload_budget", by: req.userRole, meta: { id, type, file } });
         res.json(updated);
     }
@@ -97,10 +118,10 @@ router.post("/:id/upload-signed", (0, roleMiddleware_1.requireRole)("Contractor"
         const t = await store.getTender(id);
         if (!t)
             return res.status(404).json({ error: "Tender not found" });
-        t.signedWorkOrder = `/uploads/${path_1.default.basename(req.file.path)}`;
-        t.updatedAt = new Date().toISOString();
-        await (0, activityStore_1.appendActivity)({ action: "upload_signed", by: req.userRole, meta: { id, file: t.signedWorkOrder } });
-        res.json({ message: "uploaded", file: t.signedWorkOrder });
+        const filePath = `/uploads/${path_1.default.basename(req.file.path)}`;
+        const updated = await store.updateTender(id, { signedWorkOrder: filePath });
+        await (0, activityStore_1.appendActivity)({ action: "upload_signed", by: req.userRole, meta: { id, file: filePath } });
+        res.json({ message: "uploaded", file: updated.signedWorkOrder });
     }
     catch (err) {
         res.status(500).json({ error: err.message });
@@ -109,7 +130,12 @@ router.post("/:id/upload-signed", (0, roleMiddleware_1.requireRole)("Contractor"
 // Vendors: partial registration before paywall
 router.post("/vendors/partial", async (req, res) => {
     try {
-        const v = await store.createVendor({ ...req.body, partial: true, history: [{ event: "partial_registered" }] });
+        // accept only minimal fields for quick registration
+        const { name, contact, email } = req.body;
+        if (!name)
+            return res.status(400).json({ error: "name required" });
+        const v = await store.createVendor({ name, contact, email, partial: true, history: [{ event: "partial_registered" }] });
+        await (0, activityStore_1.appendActivity)({ action: "vendor_partial_registered", meta: { id: v.id, email } });
         res.status(201).json(v);
     }
     catch (err) {
@@ -135,20 +161,62 @@ router.post("/vendors/complete", (0, roleMiddleware_1.requireRole)("Admin", "Pro
         res.status(500).json({ error: err.message });
     }
 });
+// Get vendor profile including history
+router.get("/vendors/:id", async (req, res) => {
+    try {
+        const id = req.params.id;
+        const v = await store.getVendor(id);
+        if (!v)
+            return res.status(404).json({ error: "Vendor not found" });
+        res.json(v);
+    }
+    catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+// Vendor history (paginated)
+router.get("/vendors/:id/history", async (req, res) => {
+    try {
+        const id = req.params.id;
+        const offset = req.query.offset ? Number(req.query.offset) : 0;
+        const limit = req.query.limit ? Number(req.query.limit) : 20;
+        const hist = await store.getVendorHistory(id, offset, limit);
+        res.json(hist);
+    }
+    catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+// Upcoming tenders (future dueDate, sorted)
+router.get("/upcoming", async (_req, res) => {
+    try {
+        const tenders = await store.listTenders();
+        const now = Date.now();
+        const upcoming = (tenders || [])
+            .filter((t) => t.dueDate && new Date(t.dueDate).getTime() > now)
+            .sort((a, b) => new Date(a.dueDate).getTime() - new Date(b.dueDate).getTime())
+            .map((t) => ({ id: t.id, title: t.title, dueDate: t.dueDate, status: t.status, category: t.category, subcategory: t.subcategory }));
+        res.json({ total: upcoming.length, data: upcoming });
+    }
+    catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
 // Calendar events (tender due & invoice due)
 router.get("/calendar", async (_req, res) => {
     try {
         const tenders = await store.listTenders();
         const invoices = await store.listInvoices();
         const events = [
-            ...tenders.filter(t => t.dueDate).map(t => ({ id: t.id, title: t.title, date: t.dueDate, type: "tender", status: t.status })),
+            ...tenders.map(t => ({ id: t.id, title: t.title, date: t.dueDate || t.workDue || null, type: "tender", status: t.status, workDue: t.workDue || null })),
             ...invoices.map(i => ({ id: i.id, title: `Invoice ${i.id}`, date: i.dueDate, type: "invoice", status: i.status }))
-        ];
+        ].filter(e => e.date);
         // add conditional flag for due soon (within 7 days)
         const now = Date.now();
         const withFlags = events.map(e => {
             const ts = e.date ? new Date(e.date).getTime() : Date.now();
-            return { ...e, dueSoon: ts - now <= 7 * 24 * 3600 * 1000 };
+            const diff = ts - now;
+            return { ...e, dueSoon: diff <= 7 * 24 * 3600 * 1000 && diff >= 0, overdue: diff < 0 };
         });
         res.json(withFlags);
     }
@@ -164,6 +232,22 @@ router.get("/admin/dashboard", (0, roleMiddleware_1.requireRole)("Admin"), async
         const status = await store.countTenderStatus();
         const subscriptions = await store.listSubscriptions();
         res.json({ users, tenders, status, subscriptionsCount: subscriptions.length });
+    }
+    catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+// Rich dashboard summary (admin) includes monthly series and top vendors
+router.get("/admin/dashboard/summary", (0, roleMiddleware_1.requireRole)("Admin"), async (_req, res) => {
+    try {
+        const users = await store.countUsers();
+        const tenders = await store.countTenders();
+        const status = await store.countTenderStatus();
+        const monthly = await store.countTendersByMonth(12);
+        const topVendors = await store.getTopVendors(10);
+        const subs = await store.listSubscriptions();
+        const subsByStatus = subs.reduce((acc, s) => { acc[s.status] = (acc[s.status] || 0) + 1; return acc; }, {});
+        res.json({ users, tenders, status, monthly, topVendors, subscriptions: { total: subs.length, byStatus: subsByStatus } });
     }
     catch (err) {
         res.status(500).json({ error: err.message });
@@ -189,11 +273,46 @@ router.get("/invoices", (0, roleMiddleware_1.requireRole)("Admin"), async (_req,
         res.status(500).json({ error: err.message });
     }
 });
+router.get("/invoices/:id", (0, roleMiddleware_1.requireRole)("Admin"), async (req, res) => {
+    try {
+        const id = req.params.id;
+        const inv = await store.getInvoice(id);
+        if (!inv)
+            return res.status(404).json({ error: "Invoice not found" });
+        res.json(inv);
+    }
+    catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+router.get("/invoices/user/:userId", (0, roleMiddleware_1.requireRole)("Admin"), async (req, res) => {
+    try {
+        const userId = req.params.userId;
+        const inv = await store.listInvoicesByUser(userId);
+        res.json({ total: inv.length, data: inv });
+    }
+    catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
 // Activity: unchanged
 router.get("/activity", (0, roleMiddleware_1.requireRole)("Admin"), async (_req, res) => {
     try {
         const items = await (0, activityStore_1.readActivities)(500);
         res.json({ total: items.length, items });
+    }
+    catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+// Allow posting activities tied to an email (one email can register multiple activities)
+router.post("/activities", async (req, res) => {
+    try {
+        const { email, action, meta } = req.body;
+        if (!email || !action)
+            return res.status(400).json({ error: "email and action required" });
+        await (0, activityStore_1.appendActivity)({ action, email, meta: meta || {} });
+        res.status(201).json({ message: "recorded" });
     }
     catch (err) {
         res.status(500).json({ error: err.message });

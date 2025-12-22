@@ -1,0 +1,67 @@
+{
+  "tenders": [],
+  "vendors": [
+    {
+      "id": "v-1766396069248",
+      "name": "QuickVendor",
+      "history": [
+        {
+          "event": "partial_registered"
+        }
+      ],
+      "partial": true,
+      "createdAt": "2025-12-22T09:34:29.248Z",
+      "contact": "9999999999",
+      "email": "vendor@test.local"
+    },
+    {
+      "id": "v-1766396111170",
+      "name": "QuickVendor",
+      "history": [
+        {
+          "event": "partial_registered"
+        }
+      ],
+      "partial": true,
+      "createdAt": "2025-12-22T09:35:11.170Z",
+      "contact": "9999999999",
+      "email": "vendor@test.local"
+    }
+  ],
+  "subscriptions": [
+    {
+      "id": "s-1766396068883",
+      "userId": "test-user",
+      "type": "yearly",
+      "start": "2025-12-22T09:34:28.883Z",
+      "end": "2026-12-22T09:34:28.883Z",
+      "status": "active"
+    },
+    {
+      "id": "s-1766396111150",
+      "userId": "test-user",
+      "type": "yearly",
+      "start": "2025-12-22T09:35:11.150Z",
+      "end": "2026-12-22T09:35:11.150Z",
+      "status": "active"
+    }
+  ],
+  "invoices": [],
+  "buyers": [
+    {
+      "id": "b-1766396068981",
+      "status": "pending",
+      "createdAt": "2025-12-22T09:34:28.981Z",
+      "name": "Buyer Test",
+      "email": "buyer@test.local"
+    },
+    {
+      "id": "b-1766396111158",
+      "status": "pending",
+      "createdAt": "2025-12-22T09:35:11.158Z",
+      "name": "Buyer Test",
+      "email": "buyer@test.local"
+    }
+  ],
+  "users": []
+}

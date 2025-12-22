@@ -10,6 +10,7 @@ const path_1 = __importDefault(require("path"));
 const fs_1 = __importDefault(require("fs"));
 const tenders_1 = __importDefault(require("./routes/tenders"));
 const auth_1 = __importDefault(require("./routes/auth"));
+const whatsapp_1 = __importDefault(require("./routes/whatsapp"));
 dotenv_1.default.config();
 const app = (0, express_1.default)();
 const PORT = process.env.PORT ? Number(process.env.PORT) : 4000;
@@ -27,6 +28,8 @@ app.get("/health", (_req, res) => {
 });
 // auth & mobile endpoints
 app.use("/api/auth", auth_1.default);
+// whatsapp gateway endpoints (placeholder)
+app.use("/api/whatsapp", whatsapp_1.default);
 // tenders, vendors, admin
 app.use("/api/tenders", tenders_1.default);
 // root
