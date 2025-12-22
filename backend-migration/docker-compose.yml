@@ -1,0 +1,14 @@
+version: "3.8"
+services:
+  gateway:
+    build: .
+    ports:
+      - "4000:4000"
+    environment:
+      - PORT=4000
+      - LARAVEL_API_URL=${LARAVEL_API_URL}
+      - ACTIVITY_LOG_FILE=/data/activity.log
+      - DATA_STORE_FILE=/data/db.json
+    volumes:
+      - ./data:/data
+    restart: unless-stopped

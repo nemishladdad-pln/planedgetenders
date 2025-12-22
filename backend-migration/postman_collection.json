@@ -1,0 +1,15 @@
+{
+  "info": {
+    "name": "Planedge Gateway",
+    "_postman_id": "planedge-gateway-sample",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "item": [
+    { "name": "Health", "request": { "method": "GET", "url": "{{baseUrl}}/health" } },
+    { "name": "List Tenders", "request": { "method": "GET", "url": "{{baseUrl}}/api/tenders" } },
+    { "name": "Create Tender (Admin)", "request": { "method": "POST", "header": [{ "key": "x-role", "value": "Admin" }], "body": { "mode": "raw", "raw": "{ \"title\": \"Sample Tender\", \"description\": \"Sample\" }" }, "url": "{{baseUrl}}/api/tenders" } },
+    { "name": "Search Tenders", "request": { "method": "GET", "url": "{{baseUrl}}/api/tenders/search?q=sample" } },
+    { "name": "Activity (Admin)", "request": { "method": "GET", "header": [{ "key": "x-role", "value": "Admin" }], "url": "{{baseUrl}}/api/tenders/activity" } }
+  ],
+  "variable": [{ "key": "baseUrl", "value": "http://localhost:4000" }]
+}

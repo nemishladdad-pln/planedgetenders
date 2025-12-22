@@ -1,0 +1,219 @@
+<?php
+
+namespace App\Http\Controllers\Api\V1;
+
+use App\Http\Controllers\Controller;
+use App\Models\ProfileUser;
+use App\Models\User;
+use App\Http\Requests\StoreUserRequest;
+use App\Http\Requests\UpdateUserRequest;
+use App\Http\Resources\UserResource;
+use App\Models\Role;
+use App\Services\Users\UserService;
+use Illuminate\Http\Request;
+use Illuminate\Http\Resources\Json\ResourceCollection;
+use Illuminate\Http\Response;
+use Illuminate\Support\Facades\Hash;
+use Maatwebsite\Excel\Concerns\ToArray;
+
+class UserController extends Controller
+{
+    public function __construct(protected UserService $userService) {
+        $this->authorizeResource(User::class, 'user');
+    }
+    /**
+     * Display a listing of the resource.
+     *
+     * @return Response
+     */
+    public function index(Request $request): ResourceCollection
+    {
+        //$this->authorize('index');
+
+        $field = $request->input('sort_field') ?? 'id';
+        $order = $request->input('sort_order') ?? 'desc';
+        $perPage = $request->input('per_page') ?? 10;
+
+
+        if (request('search')) {
+            $searchObj = json_decode(request('search'));
+            if ($searchObj->role_id) {
+                $roleId = $searchObj->role_id;
+            }
+        }
+        if (isset($roleId)) {
+            return UserResource::collection(
+                User::when(request('search'), function ($query) {
+                    $searchObj = json_decode(request('search'));
+                    if ($searchObj->id && $searchObj->id != '') {
+                        $query->where('id', 'like', '%' . $searchObj->id . '%');
+                    }
+                    if ($searchObj->name && $searchObj->name != '') {
+                        $query->where('name', 'like', '%' . $searchObj->name . '%');
+                    }
+                    if ($searchObj->email && $searchObj->email != '') {
+                        $query->where('email', 'like', '%' . $searchObj->email . '%');
+                    }
+                    if ($searchObj->mobile && $searchObj->mobile != '') {
+                        $query->where('mobile', 'like', '%' . $searchObj->mobile . '%');
+                    }
+                })
+                ->whereHas('roles', function ($query) use($roleId) {
+                    $query->where('id', $roleId);
+                })->orderBy($field, $order)->paginate($perPage)
+            );
+        }
+        return UserResource::collection(
+            User::when(request('search'), function ($query) {
+                $searchObj = json_decode(request('search'));
+                if ($searchObj->id && $searchObj->id != '') {
+                    $query->where('id', 'like', '%' . $searchObj->id . '%');
+                }
+                if ($searchObj->name && $searchObj->name != '') {
+                    $query->where('name', 'like', '%' . $searchObj->name . '%');
+                }
+                if ($searchObj->email && $searchObj->email != '') {
+                    $query->where('email', 'like', '%' . $searchObj->email . '%');
+                }
+                if ($searchObj->mobile && $searchObj->mobile != '') {
+                    $query->where('mobile', 'like', '%' . $searchObj->mobile . '%');
+                }
+                if ($searchObj->role_id && $searchObj->role_id != '') {
+                    $query->where('role_id', $searchObj->role_id);
+                }
+            })->orderBy($field, $order)->paginate($perPage)
+        );
+    }
+
+    /**
+     * Store a newly created resource in storage.
+     *
+     * @param  \Illuminate\Http\Request  $request
+     * @return Response
+     */
+    public function store(StoreUserRequest $request)
+    {
+        //dd($request);
+        if ($request->validated()) {
+            $user = $this->userService->create($request);
+
+            $response = [
+                'success' => true,
+                'message' => 'User created successfully.',
+                'user' => $user,
+            ];
+        } else {
+            $response = [
+                'success' => false,
+                'message' => 'Oops, there seems to have some errors.',
+                'errors' => $this->validated()->errors(),
+            ];
+        }
+        return response()->json($response, 200);
+    }
+
+
+    public function edit(User $user)
+    {
+        return response()->json(UserResource::make(User::findOrFail($user->id)), 200);
+    }
+
+    /**
+     * Display the specified resource.
+     *
+     * @param  int  $id
+     * @return Response
+     */
+    public function show($id)
+    {
+        return response()->json(User::findOrFail($id));
+    }
+
+    /**
+     * Update the specified resource in storage.
+     *
+     * @param  \Illuminate\Http\Request  $request
+     * @param  int  $id
+     * @return Response
+     */
+    public function update(UpdateUserRequest $request, User $user, ProfileUser $profileUser)
+    {
+        if ($request->validated()) {
+            $user->name = $request->name;
+            $user->email = $request->email;
+            $user->mobile = $request->mobile;
+            if ($user->profile_user) {
+                $user->profile_user->update(["mobile_no" => $request->mobile]);
+            }
+
+
+            if ($request->password) {
+                $user->password = Hash::make($request->password);
+            }
+
+
+            $user->save();
+            $role = Role::find($request->role_id);
+            $user->assignRole($role->name);
+
+            $response = [
+                'success' => true,
+                'message' => 'User updated successfully.',
+                'role' => $user,
+            ];
+        } else {
+            $response = [
+                'success' => false,
+                'message' => 'Oops, there seems to have some errors.',
+                'errors' => $this->validated()->errors(),
+            ];
+        }
+        return response()->json($response, 200);
+    }
+
+    /**
+     * Remove the specified resource from storage.
+     *
+     * @param  User  $user
+     * @return Response
+     */
+    public function destroy(User $user)
+    {
+        $response = [
+            'success' => false,
+            'message' => null,
+            'errors' => null,
+        ];
+        // First of all delete all the answers and then delete question.
+        $user->profile_user()->delete();
+        if ($user->delete()) {
+            $response = [
+                'success' => true,
+                'message' => 'User deleted successfully.',
+            ];
+        }
+        return response()->json($response);
+    }
+
+
+    public function role_list()
+    {
+        return response()->json(Role::all()->pluck('name', 'id'), 200);
+    }
+
+    public function is_email_exists($email, $id = null)
+    {
+        if ($id != null) {
+            $user = User::where([['email', '=', $email], ['id', '!=', $id]])->get()->toArray();
+        } else {
+            $user = User::where('email', $email)->get()->toArray();
+        }
+        $response = [];
+        if (!empty($user)) {
+            $response = [
+                'message' => "This email address already exists."
+            ];
+        }
+        return response()->json($response, 200);
+    }
+}
